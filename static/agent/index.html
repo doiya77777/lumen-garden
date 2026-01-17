@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lumen Agent Console</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;700&family=Source+Sans+Pro:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1f2421;
+        --muted: #4b5a57;
+        --accent: #2f6f63;
+        --accent-2: #e1b44c;
+        --surface: rgba(255, 255, 255, 0.9);
+        --stroke: rgba(31, 36, 33, 0.12);
+        --shadow: 0 18px 40px rgba(31, 36, 33, 0.16);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Source Sans Pro", sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top, #f5fbf8 0%, #e4efea 40%, #d4e2dd 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+      }
+
+      .shell {
+        max-width: 980px;
+        width: 100%;
+        background: var(--surface);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--stroke);
+        padding: 32px 40px 40px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .shell::before {
+        content: "";
+        position: absolute;
+        inset: -60% 40% 40% -60%;
+        background: radial-gradient(circle, rgba(47, 111, 99, 0.18), transparent 70%);
+        pointer-events: none;
+        animation: pulse 12s ease-in-out infinite;
+      }
+
+      header {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 32px;
+      }
+
+      h1 {
+        font-family: "Schibsted Grotesk", sans-serif;
+        font-size: 32px;
+        margin: 0;
+      }
+
+      header p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+
+      .badge {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #edf4f1;
+        color: var(--accent);
+        border: 1px solid rgba(47, 111, 99, 0.2);
+      }
+
+      form {
+        display: grid;
+        gap: 18px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+      }
+
+      label {
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      input,
+      textarea,
+      select {
+        width: 100%;
+        margin-top: 8px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--stroke);
+        background: #f8fbfa;
+        font-family: inherit;
+        font-size: 14px;
+      }
+
+      textarea {
+        min-height: 88px;
+        resize: vertical;
+      }
+
+      .toggles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 12px;
+        background: #f6f8f7;
+        border: 1px solid var(--stroke);
+        font-size: 14px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        border: none;
+        padding: 12px 18px;
+        border-radius: 12px;
+        font-family: "Schibsted Grotesk", sans-serif;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      button.primary {
+        background: var(--accent);
+        color: #fff;
+        box-shadow: 0 10px 20px rgba(47, 111, 99, 0.2);
+      }
+
+      button.ghost {
+        background: transparent;
+        border: 1px solid var(--stroke);
+        color: var(--muted);
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 24px rgba(47, 111, 99, 0.18);
+      }
+
+      .output {
+        margin-top: 24px;
+        padding: 18px;
+        border-radius: 16px;
+        background: #ffffff;
+        border: 1px solid var(--stroke);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 13px;
+        color: #1f2a27;
+        white-space: pre-wrap;
+      }
+
+      .hint {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 0.8;
+        }
+        50% {
+          transform: scale(1.12);
+          opacity: 0.5;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <div>
+          <h1>AI Digest Agent</h1>
+          <p>Collect arXiv papers, summarize with opencode, and publish to Lumen Garden.</p>
+        </div>
+        <span class="badge">Vercel Agent Console</span>
+      </header>
+
+      <form id="agent-form">
+        <div class="grid">
+          <div>
+            <label>
+              Categories (comma separated)
+              <input id="categories" type="text" value="cs.AI" />
+            </label>
+          </div>
+          <div>
+            <label>
+              Max results
+              <input id="max-results" type="number" value="5" min="1" max="20" />
+            </label>
+          </div>
+          <div>
+            <label>
+              Digest title (optional)
+              <input id="title" type="text" placeholder="arXiv Digest 2026-01-17" />
+            </label>
+          </div>
+        </div>
+
+        <label>
+          Agent token (matches AGENT_TOKEN in Vercel env)
+          <input id="token" type="password" placeholder="Bearer token" />
+        </label>
+
+        <div class="toggles">
+          <label class="toggle">
+            <input id="include-images" type="checkbox" checked />
+            Generate cover images (SVG)
+          </label>
+          <label class="toggle">
+            <input id="include-audio" type="checkbox" />
+            Generate audio summaries (TTS required)
+          </label>
+          <label class="toggle">
+            <input id="dry-run" type="checkbox" />
+            Dry run (no GitHub writes)
+          </label>
+        </div>
+
+        <div class="actions">
+          <button class="primary" type="submit">Run Agent</button>
+          <button class="ghost" type="button" id="clear">Clear Output</button>
+        </div>
+
+        <p class="hint">
+          Tip: enable audio only after TTS env vars are set. Dry run will still fetch and summarize.
+        </p>
+      </form>
+
+      <div id="output" class="output">Ready.</div>
+    </div>
+
+    <script>
+      const form = document.getElementById("agent-form")
+      const output = document.getElementById("output")
+      const clear = document.getElementById("clear")
+
+      const log = (message) => {
+        output.textContent = message
+      }
+
+      clear.addEventListener("click", () => {
+        output.textContent = "Ready."
+      })
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault()
+        log("Running agent... This can take a minute.")
+
+        const categories = document.getElementById("categories").value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
+
+        const body = {
+          categories,
+          maxResults: Number(document.getElementById("max-results").value),
+          title: document.getElementById("title").value || undefined,
+          includeImages: document.getElementById("include-images").checked,
+          includeAudio: document.getElementById("include-audio").checked,
+          dryRun: document.getElementById("dry-run").checked,
+        }
+
+        const token = document.getElementById("token").value
+        const headers = {
+          "Content-Type": "application/json",
+        }
+
+        if (token) {
+          headers.Authorization = `Bearer ${token}`
+        }
+
+        try {
+          const response = await fetch("/api/collect", {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+          })
+
+          const data = await response.json()
+          log(JSON.stringify(data, null, 2))
+        } catch (error) {
+          log(`Failed: ${error.message}`)
+        }
+      })
+    </script>
+  </body>
+</html>

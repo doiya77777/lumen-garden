@@ -12,3 +12,5 @@ This is a small notebook for tracking recent AI papers, patterns, and open quest
 - [[notes/reading-map]]
 - [[notes/ai-paper-trends-2025]]
 - [[notes/eval-checklist]]
+- [[notes/arxiv-ai-daily-2026-01-17]]
+- [[notes/ai-agent-dashboard]]
