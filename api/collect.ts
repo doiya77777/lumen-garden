@@ -425,11 +425,11 @@ export default async function handler(req: any, res: any) {
       if (includeImages) {
         const svg = buildCoverSvg(paper)
         const slug = slugify(paper.arxivId)
-        const imageFile = `static/agent/images/${slug}.svg`
+        const imageFile = `quartz/static/agent/images/${slug}.svg`
         if (!dryRun) {
           await putGitHubFile(imageFile, svg, `Add cover image for ${paper.arxivId}`)
         }
-        imagePath = `/agent/images/${slug}.svg`
+        imagePath = `/static/agent/images/${slug}.svg`
       }
 
       if (includeAudio) {
@@ -437,11 +437,11 @@ export default async function handler(req: any, res: any) {
           const audio = await maybeGenerateAudio(paper, summary)
           if (audio) {
             const slug = slugify(paper.arxivId)
-            const audioFile = `static/agent/audio/${slug}.${audio.ext}`
+            const audioFile = `quartz/static/agent/audio/${slug}.${audio.ext}`
             if (!dryRun) {
               await putGitHubFile(audioFile, audio.buffer, `Add audio summary for ${paper.arxivId}`)
             }
-            audioPath = `/agent/audio/${slug}.${audio.ext}`
+            audioPath = `/static/agent/audio/${slug}.${audio.ext}`
           } else {
             warnings.push("TTS not configured; audio skipped")
           }

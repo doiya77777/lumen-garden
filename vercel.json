@@ -1,5 +1,9 @@
 {
   "buildCommand": "npx quartz build",
   "outputDirectory": "public",
-  "cleanUrls": true
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/agent", "destination": "/static/agent/index.html" },
+    { "source": "/agent/", "destination": "/static/agent/index.html" }
+  ]
 }
