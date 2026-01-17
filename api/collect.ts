@@ -1,3 +1,5 @@
+import { createClient } from "@supabase/supabase-js"
+
 const DEFAULT_CATEGORIES = ["cs.AI"]
 const DEFAULT_MAX_RESULTS = 5
 
@@ -164,6 +166,59 @@ function buildCoverSvg(paper: any) {
 </svg>`
 }
 
+function getSupabaseClient() {
+  const supabaseUrl = getEnv("SUPABASE_URL")
+  const serviceKey = getEnv("SUPABASE_SERVICE_ROLE_KEY")
+  if (!supabaseUrl || !serviceKey) return null
+  return createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}
+
+async function verifySupabaseToken(token: string) {
+  const supabase = getSupabaseClient()
+  if (!supabase) return null
+
+  const { data, error } = await supabase.auth.getUser(token)
+  if (error || !data?.user) return null
+
+  return {
+    userId: data.user.id,
+    email: data.user.email ?? "",
+  }
+}
+
+async function logSupabaseRun(payload: {
+  userId: string
+  userEmail: string
+  categories: string[]
+  maxResults: number
+  includeAudio: boolean
+  includeImages: boolean
+  dryRun: boolean
+  noteFile: string
+  warnings: string[]
+  papers: { id: string; title: string; arxivId: string }[]
+  status: string
+}) {
+  const supabase = getSupabaseClient()
+  if (!supabase) return
+
+  await supabase.from("agent_runs").insert({
+    user_id: payload.userId,
+    user_email: payload.userEmail,
+    categories: payload.categories,
+    max_results: payload.maxResults,
+    include_audio: payload.includeAudio,
+    include_images: payload.includeImages,
+    dry_run: payload.dryRun,
+    note_file: payload.noteFile,
+    warnings: payload.warnings,
+    papers: payload.papers,
+    status: payload.status,
+  })
+}
+
 async function maybeGenerateAudio(paper: any, summary: any) {
   const ttsUrl = getEnv("TTS_API_URL")
   const ttsKey = getEnv("TTS_API_KEY")
@@ -326,12 +381,24 @@ export default async function handler(req: any, res: any) {
   }
 
   const agentToken = getEnv("AGENT_TOKEN")
-  if (agentToken) {
-    const authHeader = req.headers?.authorization || ""
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : ""
-    if (!token || token !== agentToken) {
-      return jsonResponse(res, 401, { ok: false, error: "Unauthorized" })
+  const authHeader = req.headers?.authorization || ""
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : ""
+  let authMode = ""
+  let authUser: { userId: string; email: string } | null = null
+
+  if (agentToken && token && token === agentToken) {
+    authMode = "token"
+    authUser = { userId: "token", email: "" }
+  } else if (token) {
+    const supaUser = await verifySupabaseToken(token)
+    if (supaUser) {
+      authMode = "supabase"
+      authUser = { userId: supaUser.userId, email: supaUser.email }
     }
+  }
+
+  if (!authMode) {
+    return jsonResponse(res, 401, { ok: false, error: "Unauthorized" })
   }
 
   try {
@@ -402,8 +469,29 @@ export default async function handler(req: any, res: any) {
       commitInfo = await putGitHubFile(noteFile, markdown, `Add arXiv digest ${date}`)
     }
 
+    if (authMode === "supabase" && authUser) {
+      await logSupabaseRun({
+        userId: authUser.userId,
+        userEmail: authUser.email,
+        categories,
+        maxResults,
+        includeAudio,
+        includeImages,
+        dryRun,
+        noteFile,
+        warnings,
+        papers: processed.map((paper: any) => ({
+          id: paper.id,
+          title: paper.title,
+          arxivId: paper.arxivId,
+        })),
+        status: "success",
+      })
+    }
+
     return jsonResponse(res, 200, {
       ok: true,
+      authMode,
       dryRun,
       noteFile,
       commitInfo,
@@ -417,6 +505,21 @@ export default async function handler(req: any, res: any) {
       warnings,
     })
   } catch (error: any) {
+    if (authMode === "supabase" && authUser) {
+      await logSupabaseRun({
+        userId: authUser.userId,
+        userEmail: authUser.email,
+        categories: DEFAULT_CATEGORIES,
+        maxResults: DEFAULT_MAX_RESULTS,
+        includeAudio: false,
+        includeImages: false,
+        dryRun: true,
+        noteFile: "",
+        warnings: [error.message],
+        papers: [],
+        status: "error",
+      })
+    }
     return jsonResponse(res, 500, { ok: false, error: error.message })
   }
 }

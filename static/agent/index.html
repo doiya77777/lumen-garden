@@ -8,6 +8,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;700&family=Source+Sans+Pro:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
     />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
       :root {
         color-scheme: light;
@@ -144,6 +145,35 @@
         flex-wrap: wrap;
       }
 
+      .auth {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 16px;
+        border: 1px solid var(--stroke);
+        background: #ffffff;
+        position: relative;
+      }
+
+      .auth-status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .auth-status strong {
+        color: var(--ink);
+      }
+
+      .auth-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
       button {
         border: none;
         padding: 12px 18px;
@@ -151,7 +181,9 @@
         font-family: "Schibsted Grotesk", sans-serif;
         font-weight: 600;
         cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
       }
 
       button.primary {
@@ -212,6 +244,33 @@
       </header>
 
       <form id="agent-form">
+        <div class="auth">
+          <div class="auth-status">
+            <div>
+              <div><strong>Supabase login</strong></div>
+              <div id="auth-message">Checking configuration...</div>
+            </div>
+            <span class="badge" id="auth-badge">Auth</span>
+          </div>
+          <div class="grid">
+            <label>
+              Email for magic link
+              <input id="auth-email" type="email" placeholder="you@example.com" />
+            </label>
+            <label>
+              Current user
+              <input id="auth-user" type="text" readonly />
+            </label>
+          </div>
+          <div class="auth-actions">
+            <button class="primary" type="button" id="auth-send">Send magic link</button>
+            <button class="ghost" type="button" id="auth-signout">Sign out</button>
+          </div>
+          <p class="hint">
+            The access token is used to authorize the agent and log runs in Supabase.
+          </p>
+        </div>
+
         <div class="grid">
           <div>
             <label>
@@ -270,6 +329,15 @@
       const form = document.getElementById("agent-form")
       const output = document.getElementById("output")
       const clear = document.getElementById("clear")
+      const authMessage = document.getElementById("auth-message")
+      const authBadge = document.getElementById("auth-badge")
+      const authEmail = document.getElementById("auth-email")
+      const authUser = document.getElementById("auth-user")
+      const authSend = document.getElementById("auth-send")
+      const authSignout = document.getElementById("auth-signout")
+
+      let supabaseClient = null
+      let sessionToken = ""
 
       const log = (message) => {
         output.textContent = message
@@ -279,12 +347,106 @@
         output.textContent = "Ready."
       })
 
+      const setAuthStatus = ({ label, badge, user }) => {
+        authMessage.textContent = label
+        authBadge.textContent = badge
+        authUser.value = user || ""
+      }
+
+      const setSession = (session) => {
+        sessionToken = session?.access_token || ""
+        if (session?.user?.email) {
+          setAuthStatus({
+            label: "Signed in",
+            badge: "Ready",
+            user: session.user.email,
+          })
+        } else {
+          setAuthStatus({
+            label: supabaseClient ? "Signed out" : "Supabase not configured",
+            badge: supabaseClient ? "Auth" : "Offline",
+            user: "",
+          })
+        }
+      }
+
+      const initSupabase = async () => {
+        try {
+          const response = await fetch("/api/agent-config")
+          const data = await response.json()
+          if (!data.supabaseUrl || !data.supabaseAnonKey) {
+            setAuthStatus({
+              label: "Supabase not configured. Use AGENT_TOKEN instead.",
+              badge: "Offline",
+              user: "",
+            })
+            return
+          }
+
+          supabaseClient = window.supabase.createClient(data.supabaseUrl, data.supabaseAnonKey)
+          const { data: sessionData } = await supabaseClient.auth.getSession()
+          setSession(sessionData.session)
+          supabaseClient.auth.onAuthStateChange((_event, currentSession) => {
+            setSession(currentSession)
+          })
+        } catch (error) {
+          setAuthStatus({
+            label: "Failed to load Supabase config.",
+            badge: "Error",
+            user: "",
+          })
+        }
+      }
+
+      authSend.addEventListener("click", async () => {
+        if (!supabaseClient) {
+          setAuthStatus({
+            label: "Supabase not configured. Use AGENT_TOKEN instead.",
+            badge: "Offline",
+            user: "",
+          })
+          return
+        }
+
+        const email = authEmail.value.trim()
+        if (!email) {
+          setAuthStatus({
+            label: "Enter an email to receive the magic link.",
+            badge: "Auth",
+            user: "",
+          })
+          return
+        }
+
+        setAuthStatus({ label: "Sending magic link...", badge: "Auth", user: "" })
+        const { error } = await supabaseClient.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo: `${window.location.origin}/agent/`,
+          },
+        })
+
+        if (error) {
+          setAuthStatus({ label: `Error: ${error.message}`, badge: "Error", user: "" })
+          return
+        }
+
+        setAuthStatus({ label: "Check your email for the magic link.", badge: "Auth", user: "" })
+      })
+
+      authSignout.addEventListener("click", async () => {
+        if (!supabaseClient) return
+        await supabaseClient.auth.signOut()
+        setSession(null)
+      })
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault()
         log("Running agent... This can take a minute.")
 
-        const categories = document.getElementById("categories").value
-          .split(",")
+        const categories = document
+          .getElementById("categories")
+          .value.split(",")
           .map((item) => item.trim())
           .filter(Boolean)
 
@@ -304,6 +466,8 @@
 
         if (token) {
           headers.Authorization = `Bearer ${token}`
+        } else if (sessionToken) {
+          headers.Authorization = `Bearer ${sessionToken}`
         }
 
         try {
@@ -319,6 +483,8 @@
           log(`Failed: ${error.message}`)
         }
       })
+
+      initSupabase()
     </script>
   </body>
 </html>
